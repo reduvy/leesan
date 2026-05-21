@@ -64,13 +64,14 @@ document.addEventListener('DOMContentLoaded', () => {
         countObserver.observe(statsSection);
     }
 
-    // 4. Background Particle Animation
+    // 4. Background Particle Animation (Dynamic Space/Stars)
     const canvas = document.getElementById('particles');
     if (canvas) {
         const ctx = canvas.getContext('2d');
         
         let width, height;
-        let particles = [];
+        let stars = [];
+        let shootingStars = [];
         
         function resize() {
             width = window.innerWidth;
@@ -82,19 +83,32 @@ document.addEventListener('DOMContentLoaded', () => {
         window.addEventListener('resize', resize);
         resize();
         
-        class Particle {
+        class Star {
             constructor() {
                 this.x = Math.random() * width;
                 this.y = Math.random() * height;
-                this.size = Math.random() * 2 + 0.5;
-                this.speedX = Math.random() * 0.8 - 0.4;
-                this.speedY = Math.random() * 0.8 - 0.4;
-                this.color = Math.random() > 0.5 ? 'rgba(139, 92, 246, 0.4)' : 'rgba(59, 130, 246, 0.4)';
+                this.size = Math.random() * 1.5 + 0.2;
+                // Deeper stars move slower (parallax)
+                this.speedX = (Math.random() - 0.5) * (this.size * 0.2);
+                this.speedY = (Math.random() - 0.5) * (this.size * 0.2) - (this.size * 0.05); 
+                
+                // Mostly white, some slight blueish for space feel
+                const isBlue = Math.random() > 0.8;
+                this.baseColor = isBlue ? '210, 230, 255' : '255, 255, 255';
+                
+                this.opacity = Math.random();
+                this.twinkleSpeed = Math.random() * 0.02 + 0.005;
             }
             
             update() {
                 this.x += this.speedX;
                 this.y += this.speedY;
+                
+                // Twinkling effect
+                this.opacity += this.twinkleSpeed;
+                if (this.opacity > 1 || this.opacity < 0.1) {
+                    this.twinkleSpeed = -this.twinkleSpeed;
+                }
                 
                 // Wrap around screen
                 if (this.x > width) this.x = 0;
@@ -104,52 +118,98 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             draw() {
-                ctx.fillStyle = this.color;
+                ctx.fillStyle = `rgba(${this.baseColor}, ${this.opacity})`;
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
                 ctx.fill();
             }
         }
-        
-        function initParticles() {
-            particles = [];
-            // Adjust number of particles based on screen size
-            const numParticles = Math.min(Math.floor((width * height) / 15000), 100);
-            for (let i = 0; i < numParticles; i++) {
-                particles.push(new Particle());
+
+        class ShootingStar {
+            constructor() {
+                this.reset();
             }
-        }
-        
-        function animateParticles() {
-            ctx.clearRect(0, 0, width, height);
-            
-            particles.forEach(p => {
-                p.update();
-                p.draw();
-            });
-            
-            // Connect nearby particles
-            for(let i=0; i<particles.length; i++) {
-                for(let j=i+1; j<particles.length; j++) {
-                    const dx = particles[i].x - particles[j].x;
-                    const dy = particles[i].y - particles[j].y;
-                    const distance = Math.sqrt(dx*dx + dy*dy);
-                    
-                    if (distance < 120) {
-                        ctx.beginPath();
-                        ctx.strokeStyle = `rgba(255, 255, 255, ${0.15 - distance/800})`;
-                        ctx.lineWidth = 0.5;
-                        ctx.moveTo(particles[i].x, particles[i].y);
-                        ctx.lineTo(particles[j].x, particles[j].y);
-                        ctx.stroke();
-                    }
+
+            reset() {
+                this.x = Math.random() * width;
+                this.y = -10;
+                this.length = Math.random() * 80 + 20;
+                this.speed = Math.random() * 15 + 10;
+                this.size = Math.random() * 1.5 + 0.5;
+                this.opacity = 0;
+                this.active = false;
+                this.angle = Math.PI / 4 + (Math.random() * 0.2 - 0.1); // roughly 45 degrees
+            }
+
+            spawn() {
+                this.reset();
+                this.active = true;
+                this.opacity = 1;
+            }
+
+            update() {
+                if (!this.active) return;
+                this.x -= Math.cos(this.angle) * this.speed;
+                this.y += Math.sin(this.angle) * this.speed;
+                this.opacity -= 0.015;
+
+                if (this.opacity <= 0 || this.x < 0 || this.y > height) {
+                    this.active = false;
                 }
             }
-            
-            requestAnimationFrame(animateParticles);
+
+            draw() {
+                if (!this.active) return;
+                ctx.beginPath();
+                ctx.strokeStyle = `rgba(255, 255, 255, ${this.opacity})`;
+                ctx.lineWidth = this.size;
+                ctx.moveTo(this.x, this.y);
+                ctx.lineTo(this.x + Math.cos(this.angle) * this.length, this.y - Math.sin(this.angle) * this.length);
+                ctx.stroke();
+            }
         }
         
-        initParticles();
-        animateParticles();
+        function initStars() {
+            stars = [];
+            // Many more stars for space effect
+            const numStars = Math.min(Math.floor((width * height) / 3000), 400);
+            for (let i = 0; i < numStars; i++) {
+                stars.push(new Star());
+            }
+
+            shootingStars = [];
+            for (let i = 0; i < 3; i++) {
+                shootingStars.push(new ShootingStar());
+            }
+        }
+        
+        function animateStars() {
+            ctx.clearRect(0, 0, width, height);
+            
+            // Draw regular stars
+            stars.forEach(star => {
+                star.update();
+                star.draw();
+            });
+
+            // Randomly spawn shooting stars
+            if (Math.random() < 0.015) {
+                const inactiveShootingStar = shootingStars.find(s => !s.active);
+                if (inactiveShootingStar) {
+                    inactiveShootingStar.spawn();
+                }
+            }
+
+            // Draw shooting stars
+            shootingStars.forEach(sStar => {
+                sStar.update();
+                sStar.draw();
+            });
+            
+            requestAnimationFrame(animateStars);
+        }
+        
+        initStars();
+        animateStars();
     }
 });
