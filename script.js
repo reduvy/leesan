@@ -64,152 +64,114 @@ document.addEventListener('DOMContentLoaded', () => {
         countObserver.observe(statsSection);
     }
 
-    // 4. Background Particle Animation (Dynamic Space/Stars)
+    // 4. Background Particle Animation (Warp / Wormhole Effect)
     const canvas = document.getElementById('particles');
     if (canvas) {
         const ctx = canvas.getContext('2d');
         
-        let width, height;
+        let width, height, centerX, centerY;
         let stars = [];
-        let shootingStars = [];
+        let speed = 15; // Warp speed
         
         function resize() {
             width = window.innerWidth;
             height = window.innerHeight;
+            centerX = width / 2;
+            centerY = height / 2;
             canvas.width = width;
             canvas.height = height;
+            
+            // Adjust speed relative to screen width so it feels consistent on mobile/desktop
+            speed = Math.max(8, width * 0.015);
         }
         
         window.addEventListener('resize', resize);
         resize();
         
-        class Star {
+        class WarpStar {
             constructor() {
-                this.x = Math.random() * width;
-                this.y = Math.random() * height;
-                this.size = Math.random() * 1.5 + 0.2;
-                // Deeper stars move slower (parallax)
-                this.speedX = (Math.random() - 0.5) * (this.size * 0.2);
-                this.speedY = (Math.random() - 0.5) * (this.size * 0.2) - (this.size * 0.05); 
+                this.reset(true);
+            }
+            
+            reset(randomZ = false) {
+                this.x = (Math.random() - 0.5) * width * 3;
+                this.y = (Math.random() - 0.5) * height * 3;
+                this.z = randomZ ? Math.random() * width : width;
+                this.pz = this.z;
                 
-                // Mostly white, some slight blueish for space feel
-                const isBlue = Math.random() > 0.8;
-                this.baseColor = isBlue ? '210, 230, 255' : '255, 255, 255';
-                
-                this.opacity = Math.random();
-                this.twinkleSpeed = Math.random() * 0.02 + 0.005;
+                const rand = Math.random();
+                if (rand > 0.85) this.color = '210, 230, 255'; // slight blue
+                else if (rand > 0.7) this.color = '230, 210, 255'; // slight purple
+                else this.color = '255, 255, 255'; // pure white
             }
             
             update() {
-                this.x += this.speedX;
-                this.y += this.speedY;
+                this.pz = this.z;
+                this.z -= speed;
                 
-                // Twinkling effect
-                this.opacity += this.twinkleSpeed;
-                if (this.opacity > 1 || this.opacity < 0.1) {
-                    this.twinkleSpeed = -this.twinkleSpeed;
+                if (this.z < 1) {
+                    this.reset(false);
+                    this.pz = this.z;
                 }
-                
-                // Wrap around screen
-                if (this.x > width) this.x = 0;
-                if (this.x < 0) this.x = width;
-                if (this.y > height) this.y = 0;
-                if (this.y < 0) this.y = height;
             }
             
             draw() {
-                ctx.fillStyle = `rgba(${this.baseColor}, ${this.opacity})`;
+                const fov = width;
+                
+                const sx = (this.x / this.z) * fov + centerX;
+                const sy = (this.y / this.z) * fov + centerY;
+                
+                const px = (this.x / this.pz) * fov + centerX;
+                const py = (this.y / this.pz) * fov + centerY;
+                
+                const radius = Math.max(0.5, (1 - this.z / width) * 2.5);
+                const opacity = Math.min(1, 1 - (this.z / width));
+
                 ctx.beginPath();
-                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-                ctx.fill();
-            }
-        }
-
-        class ShootingStar {
-            constructor() {
-                this.reset();
-            }
-
-            reset() {
-                this.x = Math.random() * width;
-                this.y = -10;
-                this.length = Math.random() * 80 + 20;
-                this.speed = Math.random() * 15 + 10;
-                this.size = Math.random() * 1.5 + 0.5;
-                this.opacity = 0;
-                this.active = false;
-                this.angle = Math.PI / 4 + (Math.random() * 0.2 - 0.1); // roughly 45 degrees
-            }
-
-            spawn() {
-                this.reset();
-                this.active = true;
-                this.opacity = 1;
-            }
-
-            update() {
-                if (!this.active) return;
-                this.x -= Math.cos(this.angle) * this.speed;
-                this.y += Math.sin(this.angle) * this.speed;
-                this.opacity -= 0.015;
-
-                if (this.opacity <= 0 || this.x < 0 || this.y > height) {
-                    this.active = false;
-                }
-            }
-
-            draw() {
-                if (!this.active) return;
-                ctx.beginPath();
-                ctx.strokeStyle = `rgba(255, 255, 255, ${this.opacity})`;
-                ctx.lineWidth = this.size;
-                ctx.moveTo(this.x, this.y);
-                ctx.lineTo(this.x + Math.cos(this.angle) * this.length, this.y - Math.sin(this.angle) * this.length);
+                ctx.strokeStyle = `rgba(${this.color}, ${opacity})`;
+                ctx.lineWidth = radius;
+                ctx.lineCap = 'round';
+                ctx.moveTo(px, py);
+                ctx.lineTo(sx, sy);
                 ctx.stroke();
             }
         }
         
-        function initStars() {
+        function initWarp() {
             stars = [];
-            // Many more stars for space effect
-            const numStars = Math.min(Math.floor((width * height) / 3000), 400);
-            for (let i = 0; i < numStars; i++) {
-                stars.push(new Star());
-            }
-
-            shootingStars = [];
-            for (let i = 0; i < 3; i++) {
-                shootingStars.push(new ShootingStar());
+            // Increased density for more light
+            const density = Math.min(Math.floor((width * height) / 400), 2500);
+            for (let i = 0; i < density; i++) {
+                stars.push(new WarpStar());
             }
         }
         
-        function animateStars() {
+        let mouseX = centerX;
+        let mouseY = centerY;
+        let targetX = centerX;
+        let targetY = centerY;
+
+        document.addEventListener('mousemove', (e) => {
+            targetX = width / 2 + (e.clientX - width / 2) * 0.05;
+            targetY = height / 2 + (e.clientY - height / 2) * 0.05;
+        });
+
+        function animateWarp() {
             ctx.clearRect(0, 0, width, height);
             
-            // Draw regular stars
+            // Smooth mouse follow for wormhole center
+            centerX += (targetX - centerX) * 0.1;
+            centerY += (targetY - centerY) * 0.1;
+            
             stars.forEach(star => {
                 star.update();
                 star.draw();
             });
-
-            // Randomly spawn shooting stars
-            if (Math.random() < 0.015) {
-                const inactiveShootingStar = shootingStars.find(s => !s.active);
-                if (inactiveShootingStar) {
-                    inactiveShootingStar.spawn();
-                }
-            }
-
-            // Draw shooting stars
-            shootingStars.forEach(sStar => {
-                sStar.update();
-                sStar.draw();
-            });
             
-            requestAnimationFrame(animateStars);
+            requestAnimationFrame(animateWarp);
         }
         
-        initStars();
-        animateStars();
+        initWarp();
+        animateWarp();
     }
 });
