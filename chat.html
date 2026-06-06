@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Chat Test</title>
+</head>
+<body>
+
+<h1>채팅 테스트</h1>
+
+<ul id="messages"></ul>
+
+<input id="input" autocomplete="off">
+<button onclick="sendMessage()">전송</button>
+
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+
+<script>
+const socket = io("https://leesan-server.onrender.com/");
+
+const input = document.getElementById("input");
+const messages = document.getElementById("messages");
+
+function sendMessage() {
+    socket.emit("chat message", input.value);
+    input.value = "";
+}
+
+socket.on("chat message", (msg) => {
+    const li = document.createElement("li");
+    li.textContent = msg;
+    messages.appendChild(li);
+});
+</script>
+
+</body>
+</html>
